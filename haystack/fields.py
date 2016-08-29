@@ -105,16 +105,18 @@ class SearchField(object):
         values = []
 
         for current_object in current_objects:
-            if not hasattr(current_object, attributes[0]):
-                raise SearchFieldError(
-                    "The model '%s' does not have a model_attr '%s'." % (repr(current_object), attributes[0])
-                )
-
             if len(attributes) > 1:
                 current_objects_in_attr = self.get_iterable_objects(getattr(current_object, attributes[0]))
                 return self.resolve_attributes_lookup(current_objects_in_attr, attributes[1:])
 
-            current_object = getattr(current_object, attributes[0])
+            no_field_value =  '__NOFIELD__'
+            current_object = getattr(
+                current_object, attributes[0], no_field_value
+            )
+            if current_object == no_field_value:
+                raise SearchFieldError(
+                    "The model '%s' does not have a model_attr '%s'." % (repr(current_object), attributes[0])
+                )
 
             if current_object is None:
                 if self.has_default():
