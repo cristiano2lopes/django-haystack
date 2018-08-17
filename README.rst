@@ -10,7 +10,7 @@ API that allows you to plug in different search backends (such as Solr_,
 Elasticsearch_, Whoosh_, Xapian_, etc.) without having to modify your code.
 
 .. _Solr: http://lucene.apache.org/solr/
-.. _Elasticsearch: http://elasticsearch.org/
+.. _Elasticsearch: https://www.elastic.co/products/elasticsearch
 .. _Whoosh: https://bitbucket.org/mchaput/whoosh/
 .. _Xapian: http://xapian.org/
 
@@ -33,6 +33,7 @@ Documentation
 =============
 
 * Development version: http://docs.haystacksearch.org/
+* v2.6.X: https://django-haystack.readthedocs.io/en/v2.6.0/
 * v2.5.X: https://django-haystack.readthedocs.io/en/v2.5.0/
 * v2.4.X: https://django-haystack.readthedocs.io/en/v2.4.1/
 * v2.3.X: https://django-haystack.readthedocs.io/en/v2.3.0/
