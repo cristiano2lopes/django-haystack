@@ -62,12 +62,25 @@ def update_worker(args):
 
 
 def do_update(backend, index, qs, start, end, total, verbosity=1, commit=True,
-              max_retries=DEFAULT_MAX_RETRIES):
+              max_retries=DEFAULT_MAX_RETRIES, last_max_pk=None):
 
     # Get a clone of the QuerySet so that the cache doesn't bloat up
     # in memory. Useful when reindexing large amounts of data.
     small_cache_qs = qs.all()
-    current_qs = small_cache_qs[start:end]
+
+    # If we got the max seen PK from last batch, use it to restrict the qs
+    # to values above; this optimises the query for Postgres as not to
+    # devolve into multi-second run time at large offsets.
+    if last_max_pk is not None:
+        current_qs = small_cache_qs.filter(pk__gt=last_max_pk)[:end - start]
+    else:
+        current_qs = small_cache_qs[start:end]
+
+    # Remember maximum PK seen so far
+    max_pk = None
+    current_qs = list(current_qs)
+    if current_qs:
+        max_pk = current_qs[-1].pk
 
     is_parent_process = hasattr(os, 'getppid') and os.getpid() == os.getppid()
 
@@ -116,6 +129,7 @@ def do_update(backend, index, qs, start, end, total, verbosity=1, commit=True,
 
     # Clear out the DB connections queries because it bloats up RAM.
     reset_queries()
+    return max_pk
 
 
 class Command(BaseCommand):
@@ -132,11 +146,13 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             '-s', '--start', dest='start_date',
-            help='The start date for indexing within. Can be any dateutil-parsable string, recommended to be YYYY-MM-DDTHH:MM:SS.'
+            help='The start date for indexing. Can be any dateutil-parsable string;'
+                 ' YYYY-MM-DDTHH:MM:SS is recommended to avoid confusion'
         )
         parser.add_argument(
             '-e', '--end', dest='end_date',
-            help='The end date for indexing within. Can be any dateutil-parsable string, recommended to be YYYY-MM-DDTHH:MM:SS.'
+            help='The end date for indexing. Can be any dateutil-parsable string;'
+                 ' YYYY-MM-DDTHH:MM:SS is recommended to avoid confusion'
         )
         parser.add_argument(
             '-b', '--batch-size', dest='batchsize', type=int,
@@ -249,12 +265,15 @@ class Command(BaseCommand):
             if self.workers > 0:
                 ghetto_queue = []
 
+            max_pk = None
             for start in range(0, total, batch_size):
                 end = min(start + batch_size, total)
 
                 if self.workers == 0:
-                    do_update(backend, index, qs, start, end, total, verbosity=self.verbosity,
-                              commit=self.commit, max_retries=self.max_retries)
+                    max_pk = do_update(backend, index, qs, start, end, total,
+                                       verbosity=self.verbosity,
+                                       commit=self.commit, max_retries=self.max_retries,
+                                       last_max_pk=max_pk)
                 else:
                     ghetto_queue.append((model, start, end, total, using, self.start_date, self.end_date,
                                          self.verbosity, self.commit, self.max_retries))
@@ -280,8 +299,6 @@ class Command(BaseCommand):
                     # all pks. Rebuild the list with everything.
                     qs = index.index_queryset().values_list('pk', flat=True)
                     database_pks = set(smart_bytes(pk) for pk in qs)
-
-                    total = len(database_pks)
                 else:
                     database_pks = set(smart_bytes(pk) for pk in qs.values_list('pk', flat=True))
 

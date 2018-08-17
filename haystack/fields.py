@@ -3,7 +3,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import re
 
-from django.template import Context, loader
+from django.template import loader
 from django.utils import datetime_safe, six
 
 from haystack.exceptions import SearchFieldError
@@ -246,6 +246,8 @@ class LocationField(SearchField):
         elif isinstance(value, dict):
             lat = value.get('lat', 0)
             lng = value.get('lon', 0)
+        else:
+            raise TypeError('Unable to extract coordinates from %r' % value)
 
         value = Point(float(lng), float(lat))
         return value

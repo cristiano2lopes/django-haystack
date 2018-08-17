@@ -12,12 +12,11 @@ except ImportError:
     from setuptools import setup
 
 install_requires = [
-    'Django>=1.8',
-    'Django<1.11',
+    'Django>=1.8,<1.12',
 ]
 
 tests_require = [
-    'pysolr>=3.3.2',
+    'pysolr>=3.7.0',
     'whoosh>=2.5.4,<3.0',
     'python-dateutil',
     'geopy==0.95.1',
@@ -25,6 +24,8 @@ tests_require = [
     'nose',
     'mock',
     'coverage',
+
+    'requests',
 ]
 
 setup(

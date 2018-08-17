@@ -6,7 +6,7 @@ from django.core.exceptions import ImproperlyConfigured
 from django.template import Context, Template
 from django.test import TestCase
 
-from haystack.utils import Highlighter
+from haystack.utils.highlighting import Highlighter
 
 
 class BorkHighlighter(Highlighter):
@@ -100,4 +100,4 @@ the attribute of the object to populate that field with.
         self.assertEqual(self.render(template, context), u'Bork!ing behavior for your model you can specify your own SearchIndex class.\nThis is useful for ensuring that future-dated or non-live content is not Bork!ed\nand searchable.\n\nEvery custom SearchIndex ')
 
         # Restore.
-        settings.HAYSTACK_CUSTOM_HIGHLIGHTER = None
+        settings.HAYSTACK_CUSTOM_HIGHLIGHTER = old_custom_highlighter

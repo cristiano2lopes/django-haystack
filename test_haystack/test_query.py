@@ -6,7 +6,7 @@ import unittest
 
 from django.test import TestCase
 from django.test.utils import override_settings
-from test_haystack.core.models import AnotherMockModel, CharPKMockModel, MockModel
+from test_haystack.core.models import AnotherMockModel, CharPKMockModel, MockModel, UUIDMockModel
 
 from haystack import connections, indexes, reset_search_queries
 from haystack.backends import SQ, BaseSearchQuery
@@ -16,7 +16,7 @@ from haystack.query import EmptySearchQuerySet, SearchQuerySet, ValuesListSearch
 from haystack.utils.loading import UnifiedIndex
 
 from .mocks import (MOCK_SEARCH_RESULTS, CharPKMockSearchBackend, MockSearchBackend, MockSearchQuery,
-                    ReadQuerySetMockSearchBackend)
+                    ReadQuerySetMockSearchBackend, UUIDMockSearchBackend)
 from .test_indexes import GhettoAFifthMockModelSearchIndex, TextReadQuerySetTestSearchIndex
 from .test_views import BasicAnotherMockModelSearchIndex, BasicMockModelSearchIndex
 
@@ -199,11 +199,11 @@ class BaseSearchQueryTestCase(TestCase):
         self.assertEqual(self.bsq.query_facets, [('foo', 'bar'), ('moof', 'baz'), ('foo', 'baz')])
 
     def test_add_stats(self):
-        self.bsq.add_stats_query('foo',['bar'])
-        self.assertEqual(self.bsq.stats,{'foo':['bar']})
+        self.bsq.add_stats_query('foo', ['bar'])
+        self.assertEqual(self.bsq.stats, {'foo': ['bar']})
 
-        self.bsq.add_stats_query('moof',['bar','baz'])
-        self.assertEqual(self.bsq.stats,{'foo':['bar'],'moof':['bar','baz']})
+        self.bsq.add_stats_query('moof', ['bar', 'baz'])
+        self.assertEqual(self.bsq.stats, {'foo': ['bar'], 'moof': ['bar', 'baz']})
 
     def test_add_narrow_query(self):
         self.bsq.add_narrow_query('foo:bar')
@@ -294,7 +294,6 @@ class BaseSearchQueryTestCase(TestCase):
         backend.clear()
         self.bmmsi.update()
 
-
         with self.settings(DEBUG=False):
             msq = connections['default'].get_query()
             self.assertEqual(len(msq.get_results()), 23)
@@ -324,6 +323,11 @@ class CharPKMockModelSearchIndex(indexes.SearchIndex, indexes.Indexable):
     def get_model(self):
         return CharPKMockModel
 
+class SimpleMockUUIDModelIndex(indexes.SearchIndex, indexes.Indexable):
+    text = indexes.CharField(document=True, model_attr="characteristics")
+
+    def get_model(self):
+        return UUIDMockModel
 
 @override_settings(DEBUG=True)
 class SearchQuerySetTestCase(TestCase):
@@ -337,7 +341,8 @@ class SearchQuerySetTestCase(TestCase):
         self.ui = UnifiedIndex()
         self.bmmsi = BasicMockModelSearchIndex()
         self.cpkmmsi = CharPKMockModelSearchIndex()
-        self.ui.build(indexes=[self.bmmsi, self.cpkmmsi])
+        self.uuidmmsi = SimpleMockUUIDModelIndex()
+        self.ui.build(indexes=[self.bmmsi, self.cpkmmsi, self.uuidmmsi])
         connections['default']._index = self.ui
 
         # Update the "index".
@@ -362,8 +367,8 @@ class SearchQuerySetTestCase(TestCase):
         reset_search_queries()
         self.assertEqual(len(connections['default'].queries), 0)
         self.assertRegexpMatches(repr(self.msqs),
-                                r'^<SearchQuerySet: query=<test_haystack.mocks.MockSearchQuery object'
-                                r' at 0x[0-9A-Fa-f]+>, using=None>$')
+                                 r'^<SearchQuerySet: query=<test_haystack.mocks.MockSearchQuery object'
+                                 r' at 0x[0-9A-Fa-f]+>, using=None>$')
 
     def test_iter(self):
         reset_search_queries()
@@ -403,6 +408,8 @@ class SearchQuerySetTestCase(TestCase):
         # Test to ensure we properly fill the cache, even if we get fewer
         # results back (not a handled model) than the hit count indicates.
         # This will hang indefinitely if broken.
+
+        # CharPK testing
         old_ui = self.ui
         self.ui.build(indexes=[self.cpkmmsi])
         connections['default']._index = self.ui
@@ -412,6 +419,15 @@ class SearchQuerySetTestCase(TestCase):
         loaded = [result.pk for result in results._manual_iter()]
         self.assertEqual(loaded, [u'sometext', u'1234'])
         self.assertEqual(len(connections['default'].queries), 1)
+
+        #UUID testing
+        self.ui.build(indexes=[self.uuidmmsi])
+        connections['default']._index = self.ui
+        self.uuidmmsi.update()
+
+        results = self.msqs.all()
+        loaded = [result.pk for result in results._manual_iter()]
+        self.assertEqual(loaded, [u'53554c58-7051-4350-bcc9-dad75eb248a9', u'77554c58-7051-4350-bcc9-dad75eb24888'])
 
         connections['default']._index = old_ui
 
@@ -520,6 +536,14 @@ class SearchQuerySetTestCase(TestCase):
         # Models with character primary keys.
         sqs = SearchQuerySet()
         sqs.query.backend = CharPKMockSearchBackend('charpk')
+        results = sqs.load_all().all()
+        self.assertEqual(len(results._result_cache), 0)
+        results._fill_cache(0, 2)
+        self.assertEqual(len([result for result in results._result_cache if result is not None]), 2)
+
+        # Models with uuid primary keys.
+        sqs = SearchQuerySet()
+        sqs.query.backend = UUIDMockSearchBackend('uuid')
         results = sqs.load_all().all()
         self.assertEqual(len(results._result_cache), 0)
         results._fill_cache(0, 2)
@@ -664,17 +688,17 @@ class SearchQuerySetTestCase(TestCase):
         self.assertEqual(len(sqs3.query.query_facets), 3)
 
     def test_stats(self):
-        sqs = self.msqs.stats_facet('foo','bar')
+        sqs = self.msqs.stats_facet('foo', 'bar')
         self.assertTrue(isinstance(sqs, SearchQuerySet))
-        self.assertEqual(len(sqs.query.stats),1)
+        self.assertEqual(len(sqs.query.stats), 1)
 
-        sqs2 = self.msqs.stats_facet('foo','bar').stats_facet('foo','baz')
+        sqs2 = self.msqs.stats_facet('foo', 'bar').stats_facet('foo', 'baz')
         self.assertTrue(isinstance(sqs2, SearchQuerySet))
-        self.assertEqual(len(sqs2.query.stats),1)
+        self.assertEqual(len(sqs2.query.stats), 1)
 
-        sqs3 = self.msqs.stats_facet('foo','bar').stats_facet('moof','baz')
+        sqs3 = self.msqs.stats_facet('foo', 'bar').stats_facet('moof', 'baz')
         self.assertTrue(isinstance(sqs3, SearchQuerySet))
-        self.assertEqual(len(sqs3.query.stats),2)
+        self.assertEqual(len(sqs3.query.stats), 2)
 
     def test_narrow(self):
         sqs = self.msqs.narrow('foo:moof')

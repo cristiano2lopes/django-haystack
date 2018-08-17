@@ -45,6 +45,7 @@ class MockSearchResult(SearchResult):
 MOCK_SEARCH_RESULTS = [MockSearchResult('core', 'MockModel', i, 1 - (i / 100.0)) for i in range(1, 100)]
 MOCK_INDEX_DATA = {}
 
+
 class MockSearchBackend(BaseSearchBackend):
     model_name = 'mockmodel'
 
@@ -56,7 +57,7 @@ class MockSearchBackend(BaseSearchBackend):
 
     def remove(self, obj, commit=True):
         global MOCK_INDEX_DATA
-        if commit == True:
+        if commit:
             del(MOCK_INDEX_DATA[get_identifier(obj)])
 
     def clear(self, models=None, commit=True):
@@ -107,10 +108,17 @@ class CharPKMockSearchBackend(MockSearchBackend):
     mock_search_results = [MockSearchResult('core', 'CharPKMockModel', 'sometext', 0.5),
                            MockSearchResult('core', 'CharPKMockModel', '1234', 0.3)]
 
+class UUIDMockSearchBackend(MockSearchBackend):
+    model_name = 'uuidmockmodel'
+    mock_search_results = [MockSearchResult('core', 'UUIDMockModel', '53554c58-7051-4350-bcc9-dad75eb248a9', 0.5),
+                           MockSearchResult('core', 'UUIDMockModel', '77554c58-7051-4350-bcc9-dad75eb24888', 0.5)]
+
+
 class ReadQuerySetMockSearchBackend(MockSearchBackend):
     model_name = 'afifthmockmodel'
     mock_search_results = [MockSearchResult('core', 'afifthmockmodel', 1, 2),
                            MockSearchResult('core', 'afifthmockmodel', 2, 2)]
+
 
 class MixedMockSearchBackend(MockSearchBackend):
     @log_query
